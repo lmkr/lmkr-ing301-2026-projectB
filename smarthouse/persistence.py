@@ -94,7 +94,21 @@ class SmartHouseRepository:
             if category == 'sensor':
                 d = Sensor(id,product,supplier,kind) # why no unit here?
             elif category == 'actuator':
-                d = Actuator(id,product,supplier,kind)
+                d = Actuator(id,product,supplier,kind) # TODO: Fix in case of value
+
+                res = cur.execute(f'SELECT * FROM actuators where device = "{id}"')
+                a = res.fetchone()
+
+                print(a)
+                # set persisted state of actuator if it exists
+                if a is not None:
+                    state = a[1]
+                    value = a[2] # TODO
+
+                    if state == "ON":
+                       d.turn_on()
+                    else:
+                       d.turn_off()
 
             r = ids_room.get(room_number)
 
@@ -142,19 +156,29 @@ class SmartHouseRepository:
         # )
         cur = self.cursor()
 
+        state = "OFF"
+        if actuator.is_active():
+            state = "ON"
+
+        id = actuator.id
+        res = cur.execute(f'SELECT * FROM actuators where device = "{id}"')
+        a = res.fetchone()
+
+        if a is not None:
+            cur.execute(f'UPDATE actuators SET state = "{state}" WHERE actuators.device = "{id}"')
+        else:
+            cur.execute(f'INSERT INTO actuators VALUES ("{id}","{state}","")')
+
+        self.conn.commit()
         # TODO: insert actuators with state as part of deep method
 
         #res = cur.execute('SELECT * FROM actuators')
 
         # states = res.fetchall()
-        print('X')
-        print(states)
-
-        pass
+        #print('X')
+        #print(states)
 
     # statistics
-
-    
     def calc_avg_temperatures_in_room(self, room, from_date: Optional[str] = None, until_date: Optional[str] = None) -> dict:
         """Calculates the average temperatures in the given room for the given time range by
         fetching all available temperature sensor data (either from a dedicated temperature sensor 
