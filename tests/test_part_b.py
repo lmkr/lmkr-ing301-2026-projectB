@@ -83,20 +83,6 @@ class SmartHouseTest(unittest.TestCase):
         # deactivation should have been persisted
         self.assertFalse(oven.is_active())
         self.assertFalse(plug.is_active())
-        
-        
-    def test_zadvanced_test_humidity_hours(self):
-        bath = None 
-        h = self.repo.load_smarthouse_deep()
-        for r in h.get_rooms():
-            if "bath" in r.room_name.lower() and "1" in r.room_name.lower():
-                bath = r 
-                break
-
-        expected = [7, 8, 9, 12, 18]
-        result = self.repo.calc_hours_with_humidity_above(bath, '2024-01-27')
-        self.assertSetEqual(set(expected), set(result))
-
 
     def test_zadvanced_test_temp_avgs(self):
         living_room = None
@@ -137,8 +123,17 @@ class SmartHouseTest(unittest.TestCase):
         for k in expected3.keys():
             self.assertAlmostEqual(expected3[k], actual3[k], 3)
 
+    def test_zadvanced_test_humidity_hours(self):
+        bath = None
+        h = self.repo.load_smarthouse_deep()
+        for r in h.get_rooms():
+            if "bath" in r.room_name.lower() and "1" in r.room_name.lower():
+                bath = r
+                break
 
-
+        expected = [7, 8, 9, 12, 18]
+        result = self.repo.calc_hours_with_humidity_above(bath, '2024-01-27')
+        self.assertSetEqual(set(expected), set(result))
 
 if __name__ == '__main__':
     unittest.main()

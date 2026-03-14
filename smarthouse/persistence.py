@@ -2,6 +2,8 @@ import sqlite3
 from typing import Optional
 from smarthouse.domain import *
 
+# https://gist.github.com/webminz/262efe7590d2da4312b106766dba2953
+
 class SmartHouseRepository:
     """
     Provides the functionality to persist and load a _SmartHouse_ object 
@@ -191,9 +193,41 @@ class SmartHouseRepository:
         """
         # TODO: This and the following statistic method are a bit more challenging. Try to design the respective 
         #       SQL statements first in a SQL editor like Dbeaver and then copy it over here.  
-        return NotImplemented
+        #return NotImplemented
 
-    
+        # FIXME assume that rooms are uniquely identified by the name and not using database ids (primary keys)
+
+        # start by find the id of the room in question in order to be able to join table below
+
+        db_id_query = f'SELECT id FROM rooms WHERE name = "{room.room_name}" LIMIT 1'
+        cursor = self.cursor()
+        cursor.execute(db_id_query)
+        room_id_tuple = cursor.fetchone()
+        room_id = int(room_id_tuple[0])
+
+        result = {}
+        if isinstance(room, Room):
+            lower_bound_pred = ""
+            upper_bound_pred = ""
+            if from_date is not None:
+                lower_bound_pred = f"AND ts >= '{from_date} 00:00:00'"
+            if until_date is not None:
+                upper_bound_pred = f"AND ts <= '{until_date} 23:59:59'"
+            query = f"""
+            SELECT STRFTIME('%Y-%m-%d', DATETIME(ts)), avg(value) 
+            FROM devices d 
+            INNER join measurements m ON m.device = d.id 
+            WHERE d.room = '{room_id}' AND m.unit = '°C' {lower_bound_pred} {upper_bound_pred}
+            GROUP BY STRFTIME('%Y-%m-%d', DATETIME(ts)) ;
+                    """
+            print(query)
+
+            cursor.execute(query)
+            query_result = cursor.fetchall()
+            for row in query_result:
+                result[row[0]] = float(row[1])
+        return result
+
     def calc_hours_with_humidity_above(self, room, date: str) -> list:
         """
         This function determines during which hours of the given day
@@ -202,5 +236,41 @@ class SmartHouseRepository:
         The result is a (possibly empty) list of number representing hours [0-23].
         """
         # TODO: implement
-        return NotImplemented
+        # return NotImplemented
+        # FIXME assume that rooms are uniquely identified by the name and not using database ids (primary keys)
+
+        # start by find the id of the room in question in order to be able to join table below
+        db_id_query = f'SELECT id FROM rooms WHERE name = "{room.room_name}" LIMIT 1'
+        cursor = self.cursor()
+
+        print(db_id_query)
+        cursor.execute(db_id_query)
+        room_id_tuple = cursor.fetchone()
+        room_db_id = int(room_id_tuple[0])
+
+        result = []
+        if isinstance(room, Room) and room_db_id is not None:
+            query = f"""
+        SELECT  STRFTIME('%H', DATETIME(m.ts)) AS hours 
+        FROM measurements m 
+        INNER JOIN devices d ON m.device = d.id 
+        INNER JOIN rooms r ON r.id = d.room 
+        WHERE 
+        r.id = {room_db_id}
+        AND m.unit = '%' 
+        AND DATE(m.ts) = DATE('{date}')
+        AND m.value > (
+        	SELECT AVG(value) 
+        	FROM measurements m 
+        	INNER JOIN devices d on d.id = m.device
+        	WHERE d.room = {room_db_id} AND DATE(ts) = DATE('{date}'))
+        GROUP BY hours
+        HAVING COUNT(m.value) > 3;
+                    """
+
+            print(query)
+            cursor.execute(query)
+            for h in cursor.fetchall():
+                result.append(int(h[0]))
+        return result
 
